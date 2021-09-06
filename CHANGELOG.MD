@@ -1,5 +1,10 @@
 # stockbot Change Log
 
+## [0.1.0] = 2021-09-06
+### added
+- buy stocks by "weightage"
+- modified config file to have an equal share of stocks across portfolio
+
 ## [0.1-b.3] = 2021-02-21
 ### added
 - new settings to config.py.sample, copy to your config and edit as needed

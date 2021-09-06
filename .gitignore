@@ -110,6 +110,9 @@ ENV/
 env.bak/
 venv.bak/
 
+# config
+config.py
+
 # Spyder project settings
 .spyderproject
 .spyproject
@@ -128,3 +131,14 @@ dmypy.json
 # Pyre type checker
 .pyre/
 .DS_Store
+/.idea/misc.xml
+/.idea/modules.xml
+/.idea/inspectionProfiles/profiles_settings.xml
+/.idea/inspectionProfiles/Project_Default.xml
+/.idea/stockbot.iml
+/.idea/vcs.xml
+
+# Default ignored files
+/shelf/
+/workspace.xml
+/.idea/workspace.xml
