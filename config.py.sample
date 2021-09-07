@@ -36,15 +36,13 @@ MOVED_DAYS = 3
 MOVED_DAYS_CALC = 0
 
 # buy at open
-BAO_GET_STOCKS_TIME = "8:30"  # what time to get stocks
-BAO_BUY_START_TIME = "9:30"  # what time to start buying stocks
+BAO_BUY_START_TIME = "09:30"  # what time to start buying stocks
 BAO_BUY_END_TIME = "11:00"  # what time to stop buying stocks
 BAO_SELL_START_TIME = "11:00"  # what time to start selling stocks
 BAO_SELL_END_TIME = "15:30"  # what time to stop selling stocks
 
 # buy at close
 
-BAC_GET_STOCKS_TIME = "14:30"  # what time to get stocks
 BAC_BUY_START_TIME = "15:00"  # what time to start buying stocks
 BAC_BUY_END_TIME = "16:00"  # what time to stop buying stocks
 BAC_SELL_START_TIME = "9:30"  # what time to start selling stocks
