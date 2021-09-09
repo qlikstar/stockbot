@@ -37,7 +37,9 @@ def get_stock_df(stock):
     try:
         data = alpaca.get_barset(stock, 'day', limit=5).df
         df = data[stock]
-        df['pct_change'] = round(((df['close'] - df['open']) / df['open']) * 100, 2)
+        # df['pct_change'] = round(((df['close'] - df['open']) / df['open']) * 100, 4)
+        # df['net_change'] = 1 + (df['pct_change'] / 100)
+        # df['cum_change'] = df['net_change'].cumprod()
         return df
 
     except (ConnectTimeout, HTTPError, ReadTimeout, Timeout, ConnectionError) as e:
@@ -78,8 +80,8 @@ def get_eod_change_percents(startbuytime):
         elif order.side == 'buy':
             todays_buy_sell[order.symbol]['buy'] += int(order.filled_qty) * float(order.filled_avg_price)
     for ticker in todays_buy_sell:
-        todays_buy_sell[ticker]['change'] = round((todays_buy_sell[ticker]['sell'] - todays_buy_sell[ticker]['buy'])
-                                                  / todays_buy_sell[ticker]['buy'] * 100, 2)
+        todays_buy_sell[ticker]['change'] = int(round((todays_buy_sell[ticker]['sell'] - todays_buy_sell[ticker]['buy'])
+                                                      / todays_buy_sell[ticker]['buy'] * 100, 2))
         todays_buy_sell[ticker]['sell'] = round(todays_buy_sell[ticker]['sell'], 2)
         todays_buy_sell[ticker]['buy'] = round(todays_buy_sell[ticker]['buy'], 2)
     return todays_buy_sell
@@ -147,8 +149,11 @@ def calculate_weightage(moved, change_low_to_market):
     return moved + (change_low_to_market * 2)
 
 
-def get_todays_picks(tradealgo="moved"):
+def select_best(biggest_movers):
+    return [x for x in biggest_movers if x["weightage"] > 10 and x["today_change"] > 4][:MAX_NUM_STOCKS]
 
+
+def get_todays_picks():
     # get the best buy and strong buy stock from Nasdaq.com and
     # sort them by the best stocks using one of the chosen algo
 
@@ -170,7 +175,7 @@ def get_todays_picks(tradealgo="moved"):
         if stock_price > STOCK_MAX_PRICE or stock_price < STOCK_MIN_PRICE:
             continue
 
-        sys.stdout.write('[{}/{}] -> {} ...'.format(count + 1, len(nasdaq_records), stock))
+        sys.stdout.write('[{}/{}] -> '.format(count + 1, len(nasdaq_records)))
         sys.stdout.flush()
 
         df = get_stock_df(stock)
@@ -181,48 +186,36 @@ def get_todays_picks(tradealgo="moved"):
         print('{} moved {}% over the last {} days'.format(record['symbol'], percent_change, MOVED_DAYS))
 
         latest_record = df.iloc[-1]
+        stock_open = latest_record['open']
         stock_high = latest_record['high']
         stock_low = latest_record['low']
+        stock_close = latest_record['close']
         stock_volume = latest_record['volume']
 
-        change_low_to_high = round((stock_high - stock_low) * 100 / stock_price, 3)
-
-        change_low_to_market = round((stock_price - stock_low) * 100 / stock_price, 3)
-        weightage = calculate_weightage(percent_change, change_low_to_market)
+        today_change = round((stock_close - stock_open) * 100 / stock_open, 3)
+        weightage = calculate_weightage(percent_change, today_change)
 
         stock_info.append({'symbol': stock, 'company': record['name'], 'market_price': stock_price,
                            'low': stock_low, 'high': stock_high, 'volume': stock_volume,
-                           'moved': percent_change, 'change_low_to_market': change_low_to_market,
-                           'change_low_to_high': change_low_to_high, 'weightage': weightage
+                           'moved': percent_change, 'today_change': today_change, 'weightage': weightage
                            })
 
-    biggest_movers = []
-    # sort stocks
-    if tradealgo == 'moved':
-        biggest_movers = sorted(stock_info, key=lambda i: i['weightage'], reverse=True)
-    elif tradealgo == 'lowtomarket':
-        biggest_movers = sorted(stock_info, key=lambda i: i['change_low_to_market'], reverse=True)
-    elif tradealgo == 'lowtohigh':
-        biggest_movers = sorted(stock_info, key=lambda i: i['change_low_to_high'], reverse=True)
-
-    stock_picks = biggest_movers[0:MAX_NUM_STOCKS]
-    print('\n')
-
-    print(datetime.now(tz=TZ).isoformat())
+    biggest_movers = sorted(stock_info, key=lambda i: i['weightage'], reverse=True)
+    stock_picks = select_best(biggest_movers)
+    print('\n', datetime.now(tz=TZ).isoformat())
     print('today\'s picks {}'.format(stock_picks))
     print('\n')
     return stock_picks
 
 
 def main():
-    usage = """Usage: stockbot.py [-h] [-t tradealgo] [-b startbuytime]
+    usage = """Usage: stockbot.py [-h] [-b startbuytime]
 
 StockBot v{0}
 Alpaca algo stock trading bot.""".format(STOCKBOT_VERSION)
     parser = optparse.OptionParser(usage=usage)
-    parser.add_option('-t', '--tradealgo', default='moved',
-                      help='algo to use for trading, options are moved, lowtomarket or lowtohigh, default "%default"')
-    parser.add_option('-b', '--startbuytime', default='buyatopen',
+
+    parser.add_option('-b', '--startbuytime', default='buyatclose',
                       help='when to starting buying stocks, options are buyatopen, and buyatclose, default "%default"')
     options, args = parser.parse_args()
 
@@ -237,10 +230,8 @@ Alpaca algo stock trading bot.""".format(STOCKBOT_VERSION)
 
     print(banner)
 
-    tradealgo = options.tradealgo
     startbuytime = options.startbuytime
 
-    print('Trade algo: {}'.format(tradealgo))
     print('Buy time: {}'.format(startbuytime))
 
     # Get our account information.
@@ -273,6 +264,9 @@ Alpaca algo stock trading bot.""".format(STOCKBOT_VERSION)
         sell_sh, sell_sm = BAC_SELL_START_TIME.split(':')
         sell_eh, sell_em = BAC_SELL_END_TIME.split(':')
 
+    stock_bought_prices = []
+    bought_stocks = []
+
     while True:
         try:
             # buy stocks
@@ -288,16 +282,13 @@ Alpaca algo stock trading bot.""".format(STOCKBOT_VERSION)
                     and datetime.now(tz=TZ).hour == int(buy_sh) \
                     and datetime.now(tz=TZ).minute == int(buy_sm):
 
-                stock_picks = get_todays_picks(tradealgo)
-
+                stock_picks = get_todays_picks()
                 print(datetime.now(tz=TZ).isoformat())
                 print('starting to buy stocks...')
 
                 stock_prices = []
-                stock_bought_prices = []
-                bought_stocks = []
-
                 total_buy_price = 0
+
                 while True:
                     for stock in stock_picks:
                         already_bought = False
@@ -374,11 +365,10 @@ Alpaca algo stock trading bot.""".format(STOCKBOT_VERSION)
                     and datetime.now(tz=TZ).minute >= int(sell_sm):
 
                 stock_prices = []
-
                 stock_sold_prices = []
-
-                stock_data_csv = [
-                    ['symbol', 'company', 'buy', 'buy time', 'sell', 'sell time', 'profit', 'percent', 'vol sod']]
+                stock_data_csv = [['symbol', 'company', 'buy', 'buy time', 'sell', 'sell time',
+                                   'profit', 'percent', 'vol sod']
+                                  ]
 
                 print(datetime.now(tz=TZ).isoformat())
                 print('selling stock if it goes up by {}%...'.format(SELL_PERCENT_GAIN))
@@ -462,7 +452,6 @@ Alpaca algo stock trading bot.""".format(STOCKBOT_VERSION)
                             # or sell if it's the end of the day
                             if (num_prices >= 15 and went_down > went_up) or \
                                     (datetime.now(tz=TZ).hour == sell_eh and datetime.now(tz=TZ).minute >= sell_em):
-
                                 stockinfo = [x for x in stock_bought_prices if x[0] is stock['symbol']]
                                 stock_price_buy = stockinfo[0][1]
                                 buy_time = stockinfo[0][2]
@@ -538,7 +527,7 @@ Alpaca algo stock trading bot.""".format(STOCKBOT_VERSION)
                     # write csv
 
                     now = datetime.now(tz=TZ).date().isoformat()
-                    csv_file = 'stocks_{0}_{1}.csv'.format(tradealgo, now)
+                    csv_file = 'stocks_{0}_{1}.csv'.format(startbuytime, now)
                     f = open(csv_file, 'w')
 
                     with f:

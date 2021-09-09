@@ -7,8 +7,8 @@ APIBASEURL = "https://paper-api.alpaca.markets"  # os.getenv('APCA_API_BASE_URL'
 
 
 # NASDAQ Url
-NASDAQ_API_URL = "https://api.nasdaq.com/api/screener/stocks?tableonly=true&limit=300" \
-                 "&marketcap=mega|large|mid|small" \
+NASDAQ_API_URL = "https://api.nasdaq.com/api/screener/stocks?tableonly=true&limit=1000" \
+                 "&marketcap=mega|large|mid" \
                  "&recommendation=strong_buy|buy"
 
 # max price of symbol to buy
